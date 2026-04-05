@@ -9,7 +9,7 @@ function drawLeaderboard(ctx, charsMap) {
   let startX = 20;
   let startY = 40;
   
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = '#111';
   ctx.fillText('🏆 TOP QUYỀN LỰC:', startX, startY);
   
   sorted.forEach((c, idx) => {
@@ -56,13 +56,13 @@ function drawKillFeed(ctx, entries) {
   
   entries.forEach(entry => {
     let color = '#fff';
-    if (entry.type === 'kill') color = '#ff5252';
-    if (entry.type === 'tier') color = '#ffea00';
-    if (entry.type === 'support') color = '#4caf50';
-    if (entry.type === 'boss') color = '#ff00ff';
-    if (entry.type === 'death') color = '#888';
+    if (entry.type === 'kill') color = '#d32f2f';
+    if (entry.type === 'tier') color = '#f57f17';
+    if (entry.type === 'support') color = '#388e3c';
+    if (entry.type === 'boss') color = '#7b1fa2';
+    if (entry.type === 'death') color = '#555';
     
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = '#dddddd';
     ctx.fillText(entry.text, startX+1, startY+1);
     ctx.fillStyle = color;
     ctx.fillText(entry.text, startX, startY);

@@ -234,7 +234,7 @@ class Stickman {
     ctx.strokeStyle='#222'; ctx.lineWidth=.5; ctx.strokeRect(bx,by,bw,bh);
     
     ctx.font='bold 9px Courier New'; 
-    ctx.fillStyle='#ddd'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillStyle='#111'; ctx.textAlign='center'; ctx.textBaseline='bottom';
     ctx.fillText(this.name, nx, by-2);
     
     ctx.font = '7px Courier New';

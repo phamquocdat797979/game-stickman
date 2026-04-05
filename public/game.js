@@ -145,8 +145,8 @@ function loop(time) {
   updateMovement(charsMap, dt);
 
   // Background Arena limits
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-  ctx.strokeStyle = '#5c7294';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.02)';
+  ctx.strokeStyle = '#cccccc';
   ctx.beginPath();
   ctx.roundRect(ARENA.x1, ARENA.y1, ARENA.x2-ARENA.x1, ARENA.y2-ARENA.y1, 10);
   ctx.fill();
