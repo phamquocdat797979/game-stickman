@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stickman - Skeleton + Name Body</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #07070f;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: #fff;
+    overflow: hidden;
+  }
+  #title { font-size: 20px; font-weight: bold; letter-spacing: 4px; margin-bottom: 5px; text-shadow: 0 0 20px #ff6644; }
+  #subtitle { color: #444; font-size: 11px; letter-spacing: 2px; margin-bottom: 12px; }
+  #canvas { border: 1px solid #151525; border-radius: 10px; box-shadow: 0 0 60px rgba(80,80,200,0.12); }
+  #input-row { display: flex; gap: 10px; margin-top: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  input {
+    background: #0e0e1a; border: 1px solid #2a2a44; color: #fff;
+    border-radius: 6px; padding: 8px 14px;
+    font-family: 'Courier New', monospace; font-size: 13px;
+    outline: none; width: 190px; transition: border-color 0.2s;
+  }
+  input:focus { border-color: #5566ff; }
+  select {
+    background: #0e0e1a; border: 1px solid #2a2a44; color: #aaa;
+    border-radius: 6px; padding: 8px 10px;
+    font-family: 'Courier New', monospace; font-size: 12px; outline: none;
+  }
+  button {
+    background: #0e0e1a; color: #99aaff; border: 1px solid #2a2a55;
+    border-radius: 6px; padding: 8px 16px; cursor: pointer;
+    font-family: 'Courier New', monospace; font-size: 12px;
+    letter-spacing: 1px; transition: all 0.2s;
+  }
+  button:hover { background: #181830; border-color: #5566ff; color: #fff; }
+  #skill-row { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; justify-content: center; }
+  .sbtn { font-size: 11px; padding: 6px 13px; }
+  .s0{border-color:#ff5533;color:#ff8866} .s1{border-color:#44aaff;color:#88ccff}
+  .s2{border-color:#ffcc00;color:#ffee66} .s3{border-color:#bb44ff;color:#dd88ff}
+  .s4{border-color:#00ffaa;color:#66ffcc}
+  #hint { color: #333; font-size: 11px; margin-top: 8px; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<div id="title">⚔ STICKMAN BATTLE ROYALE</div>
+<div id="subtitle">KHUNG XƯƠNG + TÊN LÀM THÂN THỂ</div>
+<canvas id="canvas" width="860" height="440"></canvas>
+
+<div id="input-row">
+  <input id="nameInput" type="text" placeholder="Nhập tên..." value="NguyenVanA" maxlength="20"/>
+  <select id="xuSelect">
+    <option value="50">50 xu — Tier 1</option>
+    <option value="200">200 xu — Tier 2</option>
+    <option value="800" selected>800 xu — Tier 3</option>
+    <option value="3000">3000 xu — Tier 4</option>
+    <option value="15000">15000 xu — Tier 5</option>
+  </select>
+  <button onclick="spawnFromInput()">➕ Tạo nhân vật</button>
+  <button onclick="clearAll()">🗑 Xóa hết</button>
+</div>
+<div id="skill-row">
+  <button class="sbtn s0" onclick="doSkill(0)">🔥 Fire [Q]</button>
+  <button class="sbtn s1" onclick="doSkill(1)">❄ Ice [W]</button>
+  <button class="sbtn s2" onclick="doSkill(2)">⚡ Thunder [E]</button>
+  <button class="sbtn s3" onclick="doSkill(3)">💀 Soul [R]</button>
+  <button class="sbtn s4" onclick="doSkill(4)">🌀 Void [T]</button>
+</div>
+<div id="hint">Click nhân vật để chọn • Q W E R T dùng kỹ năng • ← → di chuyển</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const GROUND = H - 72;
+
+// ── Helpers ──────────────────────────────────────────────────────
+const lerp = (a,b,t) => a+(b-a)*t;
+const dist  = (a,b)  => Math.hypot(b.x-a.x, b.y-a.y);
+const ang   = (a,b)  => Math.atan2(b.y-a.y, b.x-a.x);
+
+function hashStr(s){ let h=5381; for(let i=0;i<s.length;i++) h=(h*33^s.charCodeAt(i))>>>0; return h; }
+function nameColor(n){ return `hsl(${hashStr(n)%360},88%,62%)`; }
+function tierFromXu(x){ return x<100?1:x<500?2:x<2000?3:x<10000?4:5; }
+
+// IK 2-bone solver
+function solveIK(base, target, l1, l2, flip=1){
+  let d   = Math.min(dist(base,target), l1+l2-0.5);
+  let a   = ang(base,target);
+  let cos = Math.max(-1,Math.min(1,(d*d+l1*l1-l2*l2)/(2*d*l1)));
+  let a1  = Math.acos(cos)*flip;
+  return { joint:{x:base.x+Math.cos(a+a1)*l1, y:base.y+Math.sin(a+a1)*l1}, end:target };
+}
+
+// ── Particles ─────────────────────────────────────────────────────
+let particles=[];
+function spawnP(x,y,vx,vy,col,life,sz,type='dot',char=''){
+  particles.push({x,y,vx,vy,col,life,maxLife:life,sz,type,char});
+}
+function tickParticles(){
+  particles=particles.filter(p=>p.life>0);
+  for(let p of particles){
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.07; p.vx*=0.97; p.life--;
+    let a=p.life/p.maxLife;
+    ctx.save(); ctx.globalAlpha=a;
+    ctx.shadowBlur=10; ctx.shadowColor=p.col;
+    if(p.type==='dot'){
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.sz*a,0,Math.PI*2);
+      ctx.fillStyle=p.col; ctx.fill();
+    } else if(p.type==='spark'){
+      ctx.strokeStyle=p.col; ctx.lineWidth=p.sz*a; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x-p.vx*5,p.y-p.vy*5); ctx.stroke();
+    } else if(p.type==='char'){
+      ctx.font=`bold ${Math.max(4,p.sz*a)}px Courier New`;
+      ctx.fillStyle=p.col; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(p.char, p.x, p.y);
+    }
+    ctx.restore();
+  }
+}
+
+// ── Effects ───────────────────────────────────────────────────────
+let effects=[];
+function addFX(type,x,y,data){ effects.push({type,x,y,data,tick:0,life:data.dur,maxLife:data.dur}); }
+function tickEffects(){
+  effects=effects.filter(e=>e.life>0);
+  for(let e of effects){
+    e.tick++; e.life--;
+    let al=e.life/e.maxLife, pr=e.tick/e.maxLife;
+    ctx.save(); ctx.globalAlpha=al;
+
+    if(e.type==='fire'){
+      let sw=Math.PI*1.7*pr;
+      ctx.strokeStyle='#ff6600'; ctx.lineWidth=7; ctx.shadowBlur=25; ctx.shadowColor='#ff3300';
+      ctx.beginPath(); ctx.arc(e.x,e.y,68,-Math.PI*.85,-Math.PI*.85+sw); ctx.stroke();
+      if(e.tick%2===0) for(let i=0;i<6;i++){
+        let a=(-Math.PI*.85+sw)+(Math.random()-.5)*.5;
+        spawnP(e.x+Math.cos(a)*68,e.y+Math.sin(a)*68,(Math.random()-.5)*4,-Math.random()*5,
+          ['#ff0','#f80','#f40'][i%3],25,4,'spark');
+      }
+    }
+    else if(e.type==='ice'){
+      let r=135*pr;
+      ctx.strokeStyle=`rgba(130,215,255,${al})`; ctx.lineWidth=3;
+      ctx.shadowBlur=30; ctx.shadowColor='#44ccff';
+      ctx.setLineDash([8,5]); ctx.beginPath(); ctx.arc(e.x,e.y,r,0,Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      for(let i=0;i<8;i++){
+        let a=(i/8)*Math.PI*2+e.tick*.04;
+        let cx=e.x+Math.cos(a)*r, cy=e.y+Math.sin(a)*r;
+        ctx.strokeStyle=`rgba(200,240,255,${al})`; ctx.lineWidth=1.5;
+        for(let j=0;j<4;j++){ let ca=a+j/4*Math.PI*2;
+          ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(ca)*11,cy+Math.sin(ca)*11); ctx.stroke(); }
+      }
+    }
+    else if(e.type==='thunder'){
+      if(e.tick%3<2){
+        ctx.strokeStyle='#ccccff'; ctx.lineWidth=2+Math.random()*3; ctx.shadowBlur=35; ctx.shadowColor='#8888ff';
+        ctx.beginPath(); ctx.moveTo(e.x,e.y);
+        for(let i=1;i<=14;i++) ctx.lineTo(e.x+(Math.random()-.5)*48, e.y+(GROUND-e.y)*(i/14));
+        ctx.stroke();
+        if(Math.random()<.5){
+          let bx=e.x+(Math.random()-.5)*20, by=e.y+(GROUND-e.y)*Math.random()*.6;
+          ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx+(Math.random()-.5)*60,by+Math.random()*50);
+          ctx.lineWidth=1; ctx.stroke();
+        }
+        if(pr>.65){ ctx.strokeStyle=`rgba(255,255,160,${al})`; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.arc(e.x,GROUND,26*((pr-.65)/.35)*3,0,Math.PI*2); ctx.stroke(); }
+      }
+    }
+    else if(e.type==='soul'){
+      for(let i=0;i<10;i++){
+        let a=(i/10)*Math.PI*2+e.tick*.18, r2=110*(1-pr);
+        spawnP(e.x+Math.cos(a)*r2,e.y+Math.sin(a)*r2,
+          (e.x-(e.x+Math.cos(a)*r2))*.12,(e.y-(e.y+Math.sin(a)*r2))*.12,'#cc44ff',18,4,'dot');
+      }
+      ctx.strokeStyle=`rgba(160,50,255,${al})`; ctx.lineWidth=2; ctx.shadowBlur=20; ctx.shadowColor='#9900ff';
+      ctx.beginPath();
+      for(let t=0;t<Math.PI*4;t+=.12){
+        let r2=(t/(Math.PI*4))*68, a=t+e.tick*.12;
+        let px=e.x+Math.cos(a)*r2, py=e.y+Math.sin(a)*r2;
+        t<.12?ctx.moveTo(px,py):ctx.lineTo(px,py);
+      }
+      ctx.stroke();
+    }
+    else if(e.type==='void'){
+      if(pr<.4){
+        let r2=95*(1-pr/.4);
+        ctx.strokeStyle=`rgba(0,255,180,${al})`; ctx.lineWidth=3; ctx.shadowBlur=40; ctx.shadowColor='#00ffaa';
+        for(let i=0;i<6;i++){
+          let a=(i/6)*Math.PI*2+e.tick*.25;
+          ctx.beginPath(); ctx.moveTo(e.x+Math.cos(a)*r2,e.y+Math.sin(a)*r2); ctx.lineTo(e.x,e.y); ctx.stroke();
+        }
+        let g=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,32*(1-pr/.4));
+        g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,255,160,0)');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(e.x,e.y,38*(1-pr/.4),0,Math.PI*2); ctx.fill();
+      } else {
+        let bR=165*((pr-.4)/.6);
+        ctx.strokeStyle=`rgba(0,255,170,${al*2})`; ctx.lineWidth=7*(1-pr); ctx.shadowBlur=50; ctx.shadowColor='#00ffcc';
+        ctx.beginPath(); ctx.arc(e.x,e.y,bR,0,Math.PI*2); ctx.stroke();
+        for(let ring=0;ring<3;ring++){
+          ctx.strokeStyle=`rgba(0,200,140,${al*(1-ring*.3)})`; ctx.lineWidth=1.5;
+          ctx.beginPath(); ctx.arc(e.x,e.y,bR*(1-ring*.2),0,Math.PI*2); ctx.stroke();
+        }
+        if(e.tick%2===0) for(let i=0;i<6;i++){
+          let a=Math.random()*Math.PI*2, sp=4+Math.random()*6;
+          spawnP(e.x,e.y,Math.cos(a)*sp,Math.sin(a)*sp,'#00ffaa',35,5+Math.random()*4,'spark');
+        }
+      }
+    }
+    ctx.restore();
+  }
+}
+
+// ── CORE: Draw bone + chars riding on top ─────────────────────────
+// Vẽ đường xương (line) rồi đặt ký tự BÁM DỌC theo xương đó
+function drawBoneWithChars(ax, ay, bx, by, chars, boneColor, charColor, glowColor, boneWidth, charSize, wobbleAmt, wobblePhase) {
+  // 1. Vẽ xương trước (solid line)
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, by);
+  ctx.strokeStyle = boneColor;
+  ctx.lineWidth   = boneWidth;
+  ctx.lineCap     = 'round';
+  ctx.shadowBlur  = 8;
+  ctx.shadowColor = boneColor;
+  ctx.stroke();
+
+  // Đầu khớp (joint ball)
+  ctx.beginPath();
+  ctx.arc(ax, ay, boneWidth*0.8, 0, Math.PI*2);
+  ctx.fillStyle = boneColor;
+  ctx.shadowBlur = 12;
+  ctx.fill();
+  ctx.restore();
+
+  // 2. Đặt ký tự BÁM TRÊN xương
+  if (!chars || chars.length === 0) return;
+  let boneLen = dist({x:ax,y:ay},{x:bx,y:by});
+  let boneAng = ang({x:ax,y:ay},{x:bx,y:by});
+
+  // Tính vector vuông góc với xương (để wobble sang 2 bên)
+  let perpX = -Math.sin(boneAng);
+  let perpY =  Math.cos(boneAng);
+
+  // Số ký tự fit dọc theo xương
+  let spacing = Math.min(charSize * 1.1, boneLen / chars.length);
+  let count   = Math.max(1, Math.floor(boneLen / spacing));
+  let margin  = spacing * 0.5;
+
+  ctx.save();
+  ctx.font          = `bold ${charSize}px Courier New`;
+  ctx.fillStyle     = charColor;
+  ctx.shadowBlur    = 14;
+  ctx.shadowColor   = glowColor;
+  ctx.textAlign     = 'center';
+  ctx.textBaseline  = 'middle';
+
+  for (let i = 0; i < count; i++) {
+    let t  = count === 1 ? 0.5 : i / (count - 1);
+    // Vị trí dọc xương
+    let px = ax + Math.cos(boneAng) * (margin + t*(boneLen - margin*2));
+    let py = ay + Math.sin(boneAng) * (margin + t*(boneLen - margin*2));
+    // Wobble nhẹ vuông góc với xương (sinh động như thở)
+    let w  = Math.sin(wobblePhase + t*Math.PI*2) * wobbleAmt;
+    px += perpX * w;
+    py += perpY * w;
+
+    let ch = chars[i % chars.length];
+    ctx.save();
+    // Xoay ký tự theo hướng xương
+    ctx.translate(px, py);
+    ctx.rotate(boneAng + Math.PI/2);
+    ctx.fillText(ch, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// ── STICKMAN ──────────────────────────────────────────────────────
+class Stickman {
+  constructor(x, name, xu) {
+    this.x    = x;
+    this.y    = GROUND;
+    this.name = name;
+    this.xu   = xu;
+    this.tier = tierFromXu(xu);
+    this.col  = nameColor(name);
+
+    // Phân bổ ký tự vào từng phân đoạn xương
+    let raw = name.toUpperCase().replace(/\s+/g,'').split('');
+    while(raw.length < 9) raw = [...raw,...raw];
+    this.chars = {
+      torso:  raw.slice(0, Math.ceil(raw.length*.3)),
+      uArmL:  raw.slice(Math.ceil(raw.length*.3),  Math.ceil(raw.length*.45)),
+      lArmL:  raw.slice(Math.ceil(raw.length*.45), Math.ceil(raw.length*.55)),
+      uArmR:  raw.slice(Math.ceil(raw.length*.55), Math.ceil(raw.length*.7)),
+      lArmR:  raw.slice(Math.ceil(raw.length*.7),  Math.ceil(raw.length*.8)),
+      uLegL:  raw.slice(Math.ceil(raw.length*.8),  Math.ceil(raw.length*.87)),
+      lLegL:  raw.slice(Math.ceil(raw.length*.87), Math.ceil(raw.length*.93)),
+      uLegR:  raw.slice(Math.ceil(raw.length*.93), Math.ceil(raw.length*.97)),
+      lLegR:  raw.slice(Math.ceil(raw.length*.97)),
+    };
+    // Đảm bảo không segment nào rỗng
+    for(let k in this.chars) if(!this.chars[k].length) this.chars[k]=[raw[0]];
+
+    // Màu xương: tối hơn màu nhân vật một chút
+    this.boneCol = `hsla(${hashStr(name)%360},40%,25%,0.9)`;
+
+    let sc = 1+(this.tier-1)*.07;
+    this.headR  = 14;
+    this.torsoH = 42*sc;
+    this.aL1=20*sc; this.aL2=18*sc;
+    this.lL1=24*sc; this.lL2=21*sc;
+    this.charSz = 11+this.tier;
+    this.boneW  = 2+this.tier*.5;
+
+    this.walkCycle  = Math.random()*Math.PI*2;
+    this.idleBob    = Math.random()*Math.PI*2;
+    this.wobblePhase= Math.random()*Math.PI*2;
+    this.auraT      = 0;
+    this.isAttacking= false;
+    this.attackAnim = 0;
+    this.skill      = -1;
+    this.hp = 80+this.tier*40; this.maxHp=this.hp;
+  }
+
+  get neck(){ let b=Math.sin(this.idleBob)*2.5; return {x:this.x, y:this.y-this.lL1-this.lL2-this.torsoH+b}; }
+  get hip(){  let b=Math.sin(this.idleBob)*2.5; return {x:this.x, y:this.y-this.lL1-this.lL2+b}; }
+
+  draw(){
+    this.idleBob    += .045;
+    this.walkCycle  += .09;
+    this.wobblePhase+= .06;
+    this.auraT++;
+
+    let neck=this.neck, hip=this.hip;
+    let col=this.col, bone=this.boneCol;
+    let wobAmt = this.isAttacking ? 0.5 : 1.8;
+
+    // Aura
+    if(this.tier>=3 && this.auraT%3===0){
+      for(let i=0;i<this.tier-1;i++){
+        let a=Math.random()*Math.PI*2, r=22+Math.random()*26;
+        let cy=(neck.y+hip.y)/2;
+        spawnP(this.x+Math.cos(a)*r, cy+Math.sin(a)*r*.7, (Math.random()-.5)*.4,-0.5-Math.random()*.6,
+          col, 35+this.tier*6, 2+this.tier*.4,'dot');
+      }
+    }
+
+    // ── LEGS ──
+    let wL=Math.sin(this.walkCycle)*(this.isAttacking?4:16);
+    let wR=Math.sin(this.walkCycle+Math.PI)*(this.isAttacking?4:16);
+    let footL={x:hip.x-10+wL, y:this.y};
+    let footR={x:hip.x+10+wR, y:this.y};
+    let ikLL=solveIK(hip,footL,this.lL1,this.lL2, 1);
+    let ikLR=solveIK(hip,footR,this.lL1,this.lL2,-1);
+
+    drawBoneWithChars(hip.x,hip.y, ikLL.joint.x,ikLL.joint.y, this.chars.uLegL, bone,col,col, this.boneW,this.charSz, wobAmt, this.wobblePhase);
+    drawBoneWithChars(ikLL.joint.x,ikLL.joint.y, footL.x,footL.y, this.chars.lLegL, bone,col,col, this.boneW,this.charSz, wobAmt, this.wobblePhase+1);
+    drawBoneWithChars(hip.x,hip.y, ikLR.joint.x,ikLR.joint.y, this.chars.uLegR, bone,col,col, this.boneW,this.charSz, wobAmt, this.wobblePhase+.5);
+    drawBoneWithChars(ikLR.joint.x,ikLR.joint.y, footR.x,footR.y, this.chars.lLegR, bone,col,col, this.boneW,this.charSz, wobAmt, this.wobblePhase+1.5);
+
+    // ── TORSO ──
+    drawBoneWithChars(neck.x,neck.y, hip.x,hip.y, this.chars.torso, bone,col,col, this.boneW+1,this.charSz, wobAmt*.6, this.wobblePhase);
+
+    // Khớp hông (hip joint ball)
+    ctx.save();
+    ctx.beginPath(); ctx.arc(hip.x,hip.y,(this.boneW+1)*.9,0,Math.PI*2);
+    ctx.fillStyle=bone; ctx.fill(); ctx.restore();
+
+    // ── ARMS ──
+    let handL, handR;
+    if(this.isAttacking){
+      let p=this.attackAnim;
+      if(this.skill===0){ handR={x:neck.x+55*Math.sin(p*Math.PI),y:neck.y+10-20*Math.sin(p*Math.PI)}; handL={x:neck.x-18,y:neck.y+22}; }
+      else if(this.skill===1){ let sp=Math.sin(p*Math.PI*.5); handR={x:neck.x+55*sp,y:neck.y+5-10*sp}; handL={x:neck.x-55*sp,y:neck.y+5-10*sp}; }
+      else if(this.skill===2){ handR={x:neck.x+8,y:neck.y-55-p*15}; handL={x:neck.x-22,y:neck.y+18}; }
+      else if(this.skill===3){ handR={x:neck.x+52,y:neck.y+12}; handL={x:neck.x+52,y:neck.y+28}; }
+      else{ let sp=Math.sin(p*Math.PI); handR={x:neck.x+10+sp*45,y:neck.y+8-sp*12}; handL={x:neck.x-10-sp*45,y:neck.y+8-sp*12}; }
+    } else {
+      handR={x:neck.x+28+Math.sin(this.walkCycle)*13, y:neck.y+28-Math.sin(this.walkCycle)*8};
+      handL={x:neck.x-28-Math.sin(this.walkCycle)*13, y:neck.y+28+Math.sin(this.walkCycle)*8};
+    }
+    let ikAR=solveIK(neck,handR,this.aL1,this.aL2, 1);
+    let ikAL=solveIK(neck,handL,this.aL1,this.aL2,-1);
+
+    drawBoneWithChars(neck.x,neck.y, ikAL.joint.x,ikAL.joint.y, this.chars.uArmL, bone,col,col, this.boneW,this.charSz, wobAmt, this.wobblePhase+2);
+    drawBoneWithChars(ikAL.joint.x,ikAL.joint.y, handL.x,handL.y, this.chars.lArmL, bone,col,col, this.boneW,this.charSz, wobAmt, this.wobblePhase+3);
+    drawBoneWithChars(neck.x,neck.y, ikAR.joint.x,ikAR.joint.y, this.chars.uArmR, bone,col,col, this.boneW,this.charSz, wobAmt, this.wobblePhase+2.5);
+    drawBoneWithChars(ikAR.joint.x,ikAR.joint.y, handR.x,handR.y, this.chars.lArmR, bone,col,col, this.boneW,this.charSz, wobAmt, this.wobblePhase+3.5);
+
+    // Khớp vai (shoulder joint)
+    ctx.save();
+    ctx.beginPath(); ctx.arc(neck.x,neck.y,this.boneW*.9,0,Math.PI*2);
+    ctx.fillStyle=bone; ctx.fill(); ctx.restore();
+
+    // ── HEAD ──
+    let headY=neck.y-this.headR;
+    ctx.save();
+    // Cổ (neck bone nối từ neck lên đầu)
+    ctx.beginPath(); ctx.moveTo(neck.x,neck.y); ctx.lineTo(neck.x,headY+this.headR);
+    ctx.strokeStyle=bone; ctx.lineWidth=this.boneW; ctx.lineCap='round';
+    ctx.shadowBlur=6; ctx.shadowColor=bone; ctx.stroke();
+
+    ctx.beginPath(); ctx.arc(neck.x,headY,this.headR,0,Math.PI*2);
+    ctx.strokeStyle=col; ctx.lineWidth=2.5; ctx.shadowBlur=18; ctx.shadowColor=col; ctx.stroke();
+    // Fill đầu mờ
+    ctx.beginPath(); ctx.arc(neck.x,headY,this.headR,0,Math.PI*2);
+    ctx.fillStyle=`${col.replace('hsl','hsla').replace(')',',0.08)')}`; ctx.fill();
+    // Mắt
+    ctx.fillStyle=col; ctx.shadowBlur=6;
+    ctx.beginPath(); ctx.arc(neck.x-4,headY-2,2.2,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(neck.x+4,headY-2,2.2,0,Math.PI*2); ctx.fill();
+    // Miệng
+    ctx.beginPath(); ctx.arc(neck.x,headY+4,4,0,Math.PI); ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.stroke();
+
+    // Tier mark
+    let marks=['','','★','★★','⭐','👑'];
+    if(this.tier>=2){
+      ctx.font='11px serif'; ctx.fillStyle=col; ctx.textAlign='center'; ctx.shadowBlur=10;
+      ctx.fillText(marks[this.tier]||'', neck.x, headY-this.headR-5);
+    }
+    ctx.restore();
+
+    // ── NAME TAG + HP ──
+    ctx.save();
+    ctx.font='bold 11px Courier New'; ctx.fillStyle='#ddd'; ctx.textAlign='center'; ctx.shadowBlur=0;
+    ctx.fillText(this.name, neck.x, headY-this.headR-20);
+    let bw=58, bh=4, bx=neck.x-bw/2, by=headY-this.headR-32;
+    ctx.fillStyle='#111'; ctx.fillRect(bx,by,bw,bh);
+    let hw=(this.hp/this.maxHp)*bw;
+    ctx.fillStyle=this.hp>this.maxHp*.6?'#44ff66':this.hp>this.maxHp*.3?'#ffaa00':'#ff3333';
+    ctx.fillRect(bx,by,hw,bh);
+    ctx.strokeStyle='#222'; ctx.lineWidth=.5; ctx.strokeRect(bx,by,bw,bh);
+    ctx.font='9px Courier New'; ctx.fillStyle='#444';
+    ctx.fillText(`${this.xu}xu · T${this.tier}`, neck.x, by-3);
+    ctx.restore();
+
+    // Attack progress
+    if(this.isAttacking){
+      this.attackAnim+=.045;
+      if(this.attackAnim>=1){ this.isAttacking=false; this.attackAnim=0; this.skill=-1; }
+    }
+  }
+
+  useSkill(index){
+    if(this.isAttacking) return;
+    this.isAttacking=true; this.attackAnim=0; this.skill=index;
+    let neck=this.neck;
+    // Ký tự bắn ra khi dùng kỹ năng
+    setTimeout(()=>{
+      let raw=this.name.toUpperCase().split('');
+      raw.forEach((ch,i)=>{
+        let a=(i/raw.length)*Math.PI*2, sp=2+Math.random()*5;
+        spawnP(this.x,this.neck.y, Math.cos(a)*sp,Math.sin(a)*sp-2, this.col,55,14,'char',ch);
+      });
+    },200);
+    if(index===0) addFX('fire',   this.x+60, neck.y-10,{dur:42});
+    if(index===1) addFX('ice',    this.x,    neck.y-5, {dur:58});
+    if(index===2) addFX('thunder',neck.x+8,  neck.y-10,{dur:38});
+    if(index===3) addFX('soul',   this.x,    neck.y-5, {dur:65});
+    if(index===4) addFX('void',   this.x,    neck.y-5, {dur:72});
+  }
+}
+
+// ── SCENE SETUP ───────────────────────────────────────────────────
+let stickmen=[
+  new Stickman(150,'Nguyen',800),
+  new Stickman(340,'TranVanB',3000),
+  new Stickman(550,'LeThiCamTu',200),
+  new Stickman(730,'PhamD',15000),
+];
+let selected=0;
+
+function spawnFromInput(){
+  let name=document.getElementById('nameInput').value.trim()||'Guest';
+  let xu=parseInt(document.getElementById('xuSelect').value);
+  let x=80+Math.random()*(W-160);
+  stickmen.push(new Stickman(x,name,xu));
+  selected=stickmen.length-1;
+}
+function clearAll(){ stickmen=[]; particles=[]; effects=[]; selected=0; }
+function doSkill(i){ if(stickmen[selected]) stickmen[selected].useSkill(i); }
+
+canvas.addEventListener('click',e=>{
+  let r=canvas.getBoundingClientRect();
+  let mx=(e.clientX-r.left)*(W/r.width), my=(e.clientY-r.top)*(H/r.height);
+  stickmen.forEach((s,i)=>{ if(Math.hypot(mx-s.x,my-s.y)<55) selected=i; });
+});
+document.addEventListener('keydown',e=>{
+  const km={q:0,w:1,e:2,r:3,t:4};
+  if(km[e.key.toLowerCase()]!==undefined && stickmen[selected]) doSkill(km[e.key.toLowerCase()]);
+  if(e.key==='ArrowLeft'  && stickmen[selected]) stickmen[selected].x=Math.max(60,stickmen[selected].x-22);
+  if(e.key==='ArrowRight' && stickmen[selected]) stickmen[selected].x=Math.min(W-60,stickmen[selected].x+22);
+});
+
+// ── BACKGROUND ────────────────────────────────────────────────────
+let stars=Array.from({length:70},()=>({x:Math.random()*W,y:Math.random()*(H*.65),r:.4+Math.random()*.8,ph:Math.random()*Math.PI*2}));
+function drawBG(){
+  let g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#050508'); g.addColorStop(1,'#0b0916');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  for(let s of stars){
+    let a=.25+Math.sin(Date.now()*.001+s.ph)*.25;
+    ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,255,255,${a})`; ctx.fill();
+  }
+  // Safe zone
+  ctx.strokeStyle='rgba(50,110,255,0.1)'; ctx.lineWidth=2;
+  ctx.setLineDash([10,6]); ctx.beginPath(); ctx.arc(W/2,H/2+30,215,0,Math.PI*2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font='9px Courier New'; ctx.fillStyle='rgba(50,110,255,0.28)'; ctx.textAlign='center';
+  ctx.fillText('SAFE ZONE',W/2,H/2+30-221);
+  // Grid
+  ctx.strokeStyle='rgba(255,255,255,0.025)'; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=44){ ctx.beginPath(); ctx.moveTo(x,GROUND); ctx.lineTo(x-55,H); ctx.stroke(); }
+  // Ground
+  let gl=ctx.createLinearGradient(0,0,W,0);
+  gl.addColorStop(0,'rgba(255,255,255,0)'); gl.addColorStop(.5,'rgba(255,255,255,0.16)'); gl.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.strokeStyle=gl; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(0,GROUND); ctx.lineTo(W,GROUND); ctx.stroke();
+}
+
+// ── MAIN LOOP ─────────────────────────────────────────────────────
+function loop(){
+  ctx.clearRect(0,0,W,H);
+  drawBG(); tickEffects(); tickParticles();
+  stickmen.forEach((s,i)=>{
+    if(i===selected){
+      ctx.save(); ctx.beginPath(); ctx.arc(s.x,GROUND+6,30,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,255,255,0.1)'; ctx.lineWidth=2; ctx.stroke(); ctx.restore();
+    }
+    s.draw();
+  });
+  ctx.font='10px Courier New'; ctx.fillStyle='rgba(255,255,255,0.25)'; ctx.textAlign='left';
+  ctx.fillText(stickmen[selected]?`Đang chọn: ${stickmen[selected].name}  |  Click nhân vật để chọn  |  ← → di chuyển`:'Tạo nhân vật để bắt đầu', 12, H-16);
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

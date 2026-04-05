@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stickman Battle Royale - Control Panel</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e1e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-gap: 20px;
+        }
+        h1, h2, h3 {
+            color: #fff;
+            margin-top: 0;
+        }
+        .panel {
+            background-color: #2d2d30;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #1e1e1e;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0098ff;
+        }
+        .btn-red { background-color: #d32f2f; }
+        .btn-red:hover { background-color: #f44336; }
+        .btn-green { background-color: #388e3c; }
+        .btn-green:hover { background-color: #4caf50; }
+        .btn-yellow { background-color: #fbc02d; color: #000; }
+        .btn-yellow:hover { background-color: #fdd835; }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .flex-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .flex-row > div {
+            flex: 1;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #1e1e1e;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 4px;
+        }
+        #log-area {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="panel full-width">
+        <h1>🎮 TIKTOK LIVE CONTROL PANEL</h1>
+        <p>Sử dụng trang này để kết nối với màn livestream TikTok thật, hoặc tự mô phỏng các sự kiện để test game offline.</p>
+        
+        <div class="flex-row" style="background: #333; padding: 15px; border-radius: 6px;">
+            <div>
+                <label>Kết nối Live thật (@username)</label>
+                <input type="text" id="tiktok-username" placeholder="Nhập ID TikTok đang live (vd: zeros_199)">
+            </div>
+            <div style="flex: 0 0 auto;">
+                <button id="btn-connect" class="btn-green" style="height: 40px; margin-bottom: 15px;">🔗 KẾT NỐI TIKTOK</button>
+            </div>
+            <div style="flex: 0 0 auto;">
+                <button id="btn-disconnect" class="btn-red" style="height: 40px; margin-bottom: 15px;">🔌 NGẮT KẾT NỐI</button>
+            </div>
+        </div>
+        <p id="connection-status" style="color: #ff9800; font-weight: bold; margin-top: 10px;">🔴 Chưa kết nối</p>
+    </div>
+
+    <!-- MÔ PHỎNG SỰ KIỆN TIKTOK -->
+    <div class="panel">
+        <h2>🎁 1. Mô phỏng Tặng Quà (Gift)</h2>
+        <p style="font-size: 13px; color: #888;">Tạo nhân vật mới, nâng Tier, hoặc buff HP/ATK (nếu có ủng hộ)</p>
+        <div class="form-group">
+            <label>Tên người tặng</label>
+            <input type="text" id="sim-gift-user" value="ViewerA">
+        </div>
+        <div class="flex-row">
+            <div>
+                <label>Chọn mốc xu (Diamond)</label>
+                <select id="sim-gift-amount">
+                    <option value="1">1 xu (Nhấn nút/Rose)</option>
+                    <option value="20">20 xu (T1 tự cứu / Buff nhỏ)</option>
+                    <option value="50">50 xu (Lên T2)</option>
+                    <option value="200" selected>200 xu (Lên T3)</option>
+                    <option value="800">800 xu (Lên T4)</option>
+                    <option value="3000">3000 xu (Lên T5 Max)</option>
+                </select>
+            </div>
+            <div style="flex: 0 0 auto;">
+                <button onclick="simulateEvent('gift')" style="height: 38px; margin-bottom: 15px;">🎀 GỬI QUÀ</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>💬 2. Mô phỏng Bình luận (Comment)</h2>
+        <p style="font-size: 13px; color: #888;">Gửi cú pháp tấn công (@Tên) hoặc ủng hộ (+Tên)</p>
+        <div class="form-group">
+            <label>Người bình luận</label>
+            <input type="text" id="sim-comment-user" value="ViewerA">
+        </div>
+        <div class="flex-row">
+            <div>
+                <label>Nội dung comment</label>
+                <input type="text" id="sim-comment-text" placeholder="Ví dụ: @ViewerB, +ViewerC hoặc +stop">
+            </div>
+            <div style="flex: 0 0 auto;">
+                <button onclick="simulateEvent('comment')" style="height: 38px; margin-bottom: 15px;">📨 GỬI CMT</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>❤️ 3. Mô phỏng Tim & Share</h2>
+        <p style="font-size: 13px; color: #888;">Test các tương tác miễn phí</p>
+        <div class="form-group">
+            <label>Tên người thực hiện</label>
+            <input type="text" id="sim-interact-user" value="ViewerA">
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="simulateEvent('like')" class="btn-red" style="flex: 1;">❤️ NHẤN LIKES (+1 HP)</button>
+            <button onclick="simulateEvent('share')" class="btn-yellow" style="flex: 1;">📤 SHARE (+100HP/50ATK)</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>⚙️ 4. Điều khiển Server Game</h2>
+        <p style="font-size: 13px; color: #888;">Can thiệp trực tiếp vào game (Quyền Admin)</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <button onclick="simulateEvent('spawn_boss')" class="btn-red">👹 GỌI BOSS NGAY</button>
+            <button onclick="simulateEvent('clear_queue')" class="btn-yellow">🧹 XÓA HÀNG CHỜ</button>
+            <button onclick="simulateEvent('kill_all')" class="btn-red" style="opacity: 0.8;">💀 GIẾT TẤT CẢ (Reset)</button>
+            <button onclick="simulateEvent('add_bots')" class="btn-green">🤖 THÊM 5 BOTS (Test đông)</button>
+        </div>
+    </div>
+
+    <div class="panel full-width">
+        <h2>🖥️ Server Logs</h2>
+        <div id="log-area">
+            <div>[System] Trang Control Panel đã khởi động.</div>
+            <div style="color: #888;">[Lưu ý] Trang này cần kết nối thông qua Socket.IO tới Node.js Server của bạn.</div>
+        </div>
+    </div>
+
+    <!-- Mô phỏng JS để gọi đến Game Server (Sẽ hoạt động khi bạn ghép vào file server.js) -->
+    <script>
+        // MỘT VÀI HÀM CƠ BẢN ĐỂ TEST UI (Khi chạy thật cần dùng fetch() hoặc socket.io để gọi server)
+        
+        function logMsg(msg, color="#0f0") {
+            const d = new Date().toLocaleTimeString();
+            const logArea = document.getElementById('log-area');
+            const div = document.createElement('div');
+            div.style.color = color;
+            div.textContent = `[${d}] ${msg}`;
+            logArea.appendChild(div);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function sendToServer(endpoint, data) {
+            fetch(`/api/${endpoint}`, {
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(res => {
+                if (endpoint === 'connect-tiktok') {
+                    if (res.success) {
+                        document.getElementById('connection-status').innerHTML = `🟢 KẾT NỐI THÀNH CÔNG (Đang lắng nghe...)`;
+                        document.getElementById('connection-status').style.color = '#4caf50';
+                    }
+                }
+            })
+            .catch(e => {
+                console.error(e);
+                logMsg(`[LỖI] Không thể gửi tới server. Kiểm tra xem server.js đã chạy chưa.`, '#ff3333');
+            });
+            
+            logMsg(`>>> Đã gửi c.md [${endpoint.toUpperCase()}]: ${JSON.stringify(data)}`, '#00f2fe');
+        }
+
+        function simulateEvent(type) {
+            if (type === 'gift') {
+                const user = document.getElementById('sim-gift-user').value;
+                const amount = parseInt(document.getElementById('sim-gift-amount').value);
+                sendToServer('simulate-gift', { user, amount });
+                logMsg(`Mô phỏng: ${user} tặng ${amount} xu.`, '#fbc02d');
+            } 
+            else if (type === 'comment') {
+                const user = document.getElementById('sim-comment-user').value;
+                const text = document.getElementById('sim-comment-text').value;
+                if(!text) return alert("Nhập nội dung comment!");
+                sendToServer('simulate-comment', { user, text });
+                logMsg(`Mô phỏng CMT: ${user} 💬 "${text}"`);
+            }
+            else if (type === 'like') {
+                const user = document.getElementById('sim-interact-user').value;
+                sendToServer('simulate-like', { user, count: 5 });
+                logMsg(`Mô phỏng LIKE: ${user} thả tim.`, '#ff5252');
+            }
+            else if (type === 'share') {
+                const user = document.getElementById('sim-interact-user').value;
+                sendToServer('simulate-share', { user });
+                logMsg(`Mô phỏng SHARE: ${user} đã chia sẻ live.`, '#ffea00');
+            }
+            else {
+                // Các lệnh admin
+                sendToServer('admin-command', { action: type });
+            }
+        }
+
+        // Kết nối thật
+        document.getElementById('btn-connect').addEventListener('click', () => {
+            const username = document.getElementById('tiktok-username').value;
+            if(!username) return alert("Vui lòng nhập TikTok ID!");
+            
+            logMsg(`Đang thử kết nối với live của @${username}...`, '#fff');
+            sendToServer('connect-tiktok', { username });
+            
+            document.getElementById('connection-status').innerHTML = `🟡 Đang kết nối tới @${username}...`;
+            document.getElementById('connection-status').style.color = '#ffeb3b';
+        });
+
+        document.getElementById('btn-disconnect').addEventListener('click', () => {
+            sendToServer('disconnect-tiktok', {});
+            document.getElementById('connection-status').innerHTML = `🔴 Đã ngắt kết nối`;
+            document.getElementById('connection-status').style.color = '#ff9800';
+            logMsg(`Đã ngắt kết nối Live TikTok.`, '#ff5252');
+        });
+    </script>
+</body>
+</html>
